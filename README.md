@@ -1,8 +1,17 @@
 # compomics-utilities-dmo-op #
 
-Introduced changes:
-- ...
+Introduced changes (see from_valeriia/):
+- introduce boolean variable enableMassFilling, set to false
+- add if statements with enableMassFilling as key to 
+    - skip recursiveMassFilling in init()
+    - skip handling Xs
+- this modifications imply that there are no peptides containing Xs in pepxml
 
+Build:
+module load maven/3.9.10
+mvn clean install -DskipTests
+rename utils-5.1.17.jar into utils-5.1.15.jar
+transfer .jar into PeptideShaker-3.0.11-custom/lib/
 
 # compomics-utilities #
 
