@@ -41,7 +41,9 @@ import java.util.HashSet;
 import java.util.Iterator;
 import java.util.LinkedList;
 import java.util.Set;
+import java.util.Stack;
 import java.util.TreeSet;
+import java.util.stream.Collectors;
 import org.jsuffixarrays.*;
 import com.compomics.util.experiment.identification.protein_inference.FastaMapper;
 import com.compomics.util.experiment.personalization.ExperimentObject;
@@ -62,6 +64,22 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.stream.Collectors;
 
 /**
+ * This class keeps state of possible mass combinations in recursiveMassFilling (omiitting recursive calculation)
+ */
+class State {
+    double mass;
+    int pos;
+    int loop;
+    int indexesSize;
+    State(double m, int p, int l, int s) {
+        mass = m;
+        pos = p;
+        loop = l;
+        indexesSize = s;
+    }
+}
+
+/**
  * The FM index.
  *
  * @author Dominik Kopczynski
@@ -69,6 +87,10 @@ import java.util.stream.Collectors;
  */
 public class FMIndex extends ExperimentObject implements FastaMapper, SequenceProvider, ProteinDetailsProvider {
 
+    /**
+     * Skip recursionMassFilling
+     */
+    private boolean enableMassFilling = false;
     /**
      * FMIndex version number.
      */
@@ -1221,8 +1243,10 @@ public class FMIndex extends ExperimentObject implements FastaMapper, SequencePr
             }
         }
         massIndexMaps = new ArrayList<>(1000000);
-
-        recursiveMassFilling(0., 0, 0, null);
+        
+        if (enableMassFilling){
+            recursiveMassFilling(0., 0, 0, null);
+        }
 
         Collections.sort(massIndexMaps, new Comparator<MassIndexMap>() {
             public int compare(MassIndexMap m1, MassIndexMap m2) {
@@ -1573,52 +1597,68 @@ public class FMIndex extends ExperimentObject implements FastaMapper, SequencePr
     }
 
     /**
-     * Recursive function to compute all possible mass combinations up to a
+     * Iterative function to compute all possible mass combinations up to a
      * given maximum limit
      *
      * @param mass current mass
      * @param pos current index of amino acid mass array
      */
-    void recursiveMassFilling(double mass, int pos, int loop, int[] massIndexes) {
-        if (mass >= LOOKUP_MAX_MASS) {
-            return;
-        }
-        double transformedMass = computeMassTolerance(massTolerance, mass);
-        if (mass > transformedMass) {
-            int startMass = (int) ((mass - transformedMass) * lookupMultiplier);
-            int endMass = (int) ((mass + transformedMass) * lookupMultiplier + 1);
+    void recursiveMassFilling(double mass, int pos, int loop, int[] massIndexes) 
+    {
+        ArrayList<Integer> currentIndexes;
+        
+        if (massIndexes == null) 
+            currentIndexes = new ArrayList<>();
+        else
+            currentIndexes = Arrays.stream(massIndexes).boxed().collect(Collectors.toCollection(ArrayList::new));
 
-            lookupMasses[startMass >>> 6] |= (~(0L)) << (startMass & 63);
-            for (int p = (startMass >>> 6) + 1; p < (endMass >>> 6); ++p) {
-                lookupMasses[p] = ~0L;
+        Stack<State> stack = new Stack<>();
+        stack.push(new State(mass, pos, loop, currentIndexes.size()));
+
+        while (!stack.isEmpty()) {
+            State current = stack.pop();
+
+            // trim currentIndexes to current.indexesSize
+            while (currentIndexes.size() > current.indexesSize) {
+                currentIndexes.remove(currentIndexes.size() - 1);
             }
-            lookupMasses[endMass >>> 6] |= (~(0L)) >>> (64 - (endMass & 63));
 
-            startMass = (int) ((mass + 1 - transformedMass) * lookupMultiplier);
-            endMass = (int) ((mass + 1 + transformedMass) * lookupMultiplier + 1);
+            if (current.mass >= LOOKUP_MAX_MASS) {
+                continue;
+            }
 
-            if (loop <= maxXPerTag) {
-                Xlookup[loop][startMass >>> 6] |= (~(0L)) << (startMass & 63);
+            double transformedMass = computeMassTolerance(massTolerance, current.mass);
+            if (current.mass > transformedMass) {
+                int startMass = (int) ((current.mass - transformedMass) * lookupMultiplier);
+                int endMass = (int) ((current.mass + transformedMass) * lookupMultiplier + 1);
+
+                lookupMasses[startMass >>> 6] |= (~(0L)) << (startMass & 63);
                 for (int p = (startMass >>> 6) + 1; p < (endMass >>> 6); ++p) {
-                    Xlookup[loop][p] = ~0L;
+                    lookupMasses[p] = ~0L;
                 }
-                Xlookup[loop][endMass >>> 6] |= (~(0L)) >>> (64 - (endMass & 63));
+                lookupMasses[endMass >>> 6] |= (~(0L)) >>> (64 - (endMass & 63));
 
-                massIndexMaps.add(new MassIndexMap(mass, massIndexes));
+                startMass = (int) ((current.mass + 1 - transformedMass) * lookupMultiplier);
+                endMass = (int) ((current.mass + 1 + transformedMass) * lookupMultiplier + 1);
+
+                if (current.loop <= maxXPerTag) {
+                    Xlookup[current.loop][startMass >>> 6] |= (~(0L)) << (startMass & 63);
+                    for (int p = (startMass >>> 6) + 1; p < (endMass >>> 6); ++p) {
+                        Xlookup[current.loop][p] = ~0L;
+                    }
+                    Xlookup[current.loop][endMass >>> 6] |= (~(0L)) >>> (64 - (endMass & 63));
+
+                    int[] massIndexesArray = currentIndexes.stream().mapToInt(i -> i).toArray();
+                    massIndexMaps.add(new MassIndexMap(current.mass, massIndexesArray));
+                }
+            }
+
+            for (int i = current.pos; i < aaMassIndexes.length; ++i) {
+                currentIndexes.add(aaMassIndexes[i]);
+                stack.push(new State(current.mass + aaMasses[aaMassIndexes[i]], i, current.loop + 1, currentIndexes.size()));
             }
         }
-
-        for (int i = pos; i < aaMassIndexes.length; ++i) {
-            int[] massIndexesNew = new int[massIndexes != null ? massIndexes.length + 1 : 1];
-            if (massIndexes != null) {
-                for (int j = 0; j < massIndexes.length; ++j) {
-                    massIndexesNew[j] = massIndexes[j];
-                }
-            }
-            massIndexesNew[massIndexesNew.length - 1] = aaMassIndexes[i];
-            recursiveMassFilling(mass + aaMasses[aaMassIndexes[i]], i, loop + 1, massIndexesNew);
-        }
-    }
+    }    
 
     /**
      * Returns a list of all possible amino acids per position in the peptide
@@ -2506,6 +2546,12 @@ public class FMIndex extends ExperimentObject implements FastaMapper, SequencePr
     }
 
     private boolean massNotValid(double currMass, double refMass) {
+        // mass is always valid
+        /**
+        if (!enableMassFilling){
+            return false;
+        }
+        */
         double diffMass = Math.abs(currMass - refMass);
         int intMass = (int) (diffMass * lookupMultiplier);
         return (diffMass > computeMassTolerance(massTolerance, refMass) && diffMass < LOOKUP_MAX_MASS && (((lookupMasses[intMass >>> 6] >>> (intMass & 63)) & 1L) == 0));
@@ -3725,6 +3771,9 @@ public class FMIndex extends ExperimentObject implements FastaMapper, SequencePr
      * @return decision
      */
     public boolean withinMassTolerance(double mass, int numX) {
+        if (!enableMassFilling){
+            return false;
+        }
         if (mass + computeMassTolerance(massTolerance, mass) < negativeModificationMass) {
             return false;
         }
@@ -4886,7 +4935,9 @@ public class FMIndex extends ExperimentObject implements FastaMapper, SequencePr
                     }
                 }
 
-            } else {
+            } else if (!enableMassFilling) {
+                continue;
+            }else {
 
                 // substituting all Xs if present into their corresponding amino acids
                 ArrayList< ArrayList<Integer>> xSets = new ArrayList<>();
