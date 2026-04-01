@@ -193,8 +193,36 @@ public class PhosphoRS {
                 .sorted()
                 .toArray();
 
-        HashMap<Integer, Double> profileToScoreMap = new HashMap<>(possibleSites.length);
-        HashMap<Integer, int[]> profileToSitesMap = new HashMap<>(possibleSites.length);
+            HashMap<Integer, Double> profileToScoreMap = new HashMap<>(possibleSites.length);
+            HashMap<Integer, int[]> profileToSitesMap = new HashMap<>(possibleSites.length);
+            HashMap<Integer, HashSet<String>> siteToModNames = new HashMap<>(possibleSites.length);
+
+            for (Modification modification : modifications) {
+
+                int[] modificationSites = ModificationUtils.getPossibleModificationSites(
+                        peptide,
+                        modification,
+                        sequenceProvider,
+                        modificationSequenceMatchingParameters,
+                        modificationProvider,
+                        true
+                );
+
+                for (int site : modificationSites) {
+
+                    HashSet<String> siteModNames = siteToModNames.get(site);
+
+                    if (siteModNames == null) {
+
+                        siteModNames = new HashSet<>(1);
+                        siteToModNames.put(site, siteModNames);
+
+                    }
+
+                    siteModNames.add(modification.getName());
+
+                }
+            }
 
         if (possibleSites.length > nModification) {
 
@@ -249,6 +277,7 @@ public class PhosphoRS {
             HashMap<Integer, Peptide> profileToPeptide = getPossiblePeptidesMap(
                     peptide,
                     modNames,
+                    siteToModNames,
                     possibleProfileKeys,
                     possibleProfiles
             );
@@ -869,11 +898,11 @@ public class PhosphoRS {
     private static HashMap<Integer, Peptide> getPossiblePeptidesMap(
             Peptide peptide,
             HashSet<String> modNames,
+            HashMap<Integer, HashSet<String>> siteToModNames,
             int[] profileKeys,
             ArrayList<int[]> possibleProfiles
     ) {
 
-        String representativeModification = modNames.stream().findAny().get();
         HashMap<Integer, Peptide> result = new HashMap<>(possibleProfiles.size());
 
         for (int i = 0; i < profileKeys.length; i++) {
@@ -884,6 +913,33 @@ public class PhosphoRS {
 
             for (int pos : profile) {
 
+                ModificationMatch[] variableModifications = tempPeptide.getVariableModifications();
+
+                if (variableModifications != null
+                        && Arrays.stream(variableModifications)
+                                .anyMatch(
+                                        modificationMatch -> modificationMatch.getSite() == pos
+                                )) {
+
+                    continue;
+
+                }
+
+                HashSet<String> siteModNames = siteToModNames.get(pos);
+
+                if (siteModNames == null || siteModNames.isEmpty()) {
+
+                    throw new IllegalArgumentException(
+                            "No site-compatible same-mass modification found at site "
+                            + pos
+                            + " for peptide "
+                            + peptide.getSequence()
+                            + "."
+                    );
+
+                }
+
+                String representativeModification = siteModNames.stream().findAny().get();
                 tempPeptide.addVariableModification(new ModificationMatch(representativeModification, pos));
 
             }

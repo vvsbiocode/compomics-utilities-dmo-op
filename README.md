@@ -1,17 +1,31 @@
 # compomics-utilities-dmo-op #
 
-Introduced changes (see from_valeriia/):
+Introduced changes (see from_valeriia/)
+
+FM_index:
 - introduce boolean variable enableMassFilling, set to false
 - add if statements with enableMassFilling as key to 
     - skip recursiveMassFilling in init()
     - skip handling Xs
 - this modifications imply that there are no peptides containing Xs in pepxml
 
+PhosphoRT:
+- substitute representativeModification (any modification of same-mass-group) by one selected from siteToModNames (containes all modification names and their specificity of one same-mass-group) based on mass and residue
+    - if abcent - throw exception
+- before incerting a modification into peptide, check that this site is not occupied
+    - if occupied - skip the site
+- this changes avoide wrong modification name mapping and ptms collision on one site due to rescoring
+
 Build:
+```bash
 module load maven/3.9.10
+
 mvn clean install -DskipTests
+
 rename utils-5.1.17.jar into utils-5.1.15.jar
+
 transfer .jar into PeptideShaker-3.0.11-custom/lib/
+``
 
 # compomics-utilities #
 
