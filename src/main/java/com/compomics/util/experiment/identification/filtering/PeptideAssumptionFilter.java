@@ -269,10 +269,19 @@ public class PeptideAssumptionFilter extends ExperimentObject {
         if (unknownModification) {
 
             ModificationMatch[] modificationMatches = peptide.getVariableModifications();
-
-            if (Arrays.stream(modificationMatches)
+            String[] unknownModifications = Arrays.stream(modificationMatches)
                     .map(ModificationMatch::getModification)
-                    .anyMatch(modName -> !modificationFactory.containsModification(modName))) {
+                    .filter(modName -> !modificationFactory.containsModification(modName))
+                    .distinct()
+                    .toArray(String[]::new);
+
+            if (unknownModifications.length > 0) {
+                System.err.println(
+                        "Unrecognized modification rejection for peptide "
+                        + peptide.getSequence()
+                        + ". Unknown modifications: "
+                        + String.join(", ", unknownModifications)
+                );
 
                 return false;
 
