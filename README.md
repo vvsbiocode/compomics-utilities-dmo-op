@@ -16,15 +16,19 @@ PhosphoRT:
     - if occupied - skip the site
 - this changes avoide wrong modification name mapping and ptms collision on one site due to rescoring
 
+PepxmlIdfileReader:
+- when load spectrumTitle from spectrum file by PSM index, subtruct one, as java array indexing is 0-based
+
+
 Build:
 ```bash
 module load maven/3.9.10
 
 mvn clean install -DskipTests
 
-rename utils-5.1.17.jar into utils-5.1.15.jar
+#rename utils-5.1.17.jar into utils-5.1.15.jar
 
-transfer .jar into PeptideShaker-3.0.11-custom/lib/
+#transfer .jar into PeptideShaker-3.0.11-custom/lib/
 ``
 
 # compomics-utilities #

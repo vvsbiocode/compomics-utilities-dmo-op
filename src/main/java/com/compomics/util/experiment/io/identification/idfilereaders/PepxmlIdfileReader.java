@@ -543,7 +543,7 @@ public class PepxmlIdfileReader implements IdfileReader {
 
         } else {
 
-            spectrumTitle = spectrumProvider.getSpectrumTitles(IoUtil.removeExtension(spectrumFileName))[index];
+            spectrumTitle = spectrumProvider.getSpectrumTitles(IoUtil.removeExtension(spectrumFileName))[index-1];
 
         }
 
