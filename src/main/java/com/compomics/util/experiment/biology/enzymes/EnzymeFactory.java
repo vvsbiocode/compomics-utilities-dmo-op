@@ -342,6 +342,12 @@ public class EnzymeFactory {
         enzyme.addAminoAcidAfter('K');
         enzymes.add(enzyme);
 
+        // parameters from https://github.com/CompOmics/compomics-utilities/blob/8e400f10a9bbeb1dac8eeb8bd3ec266f8fe1e968/exampleFiles/experiment/enzymes.xml
+        enzyme = new Enzyme("Whole Protein");
+        enzyme.addAminoAcidBefore('X');
+        enzyme.addRestrictionAfter('X');
+        enzymes.add(enzyme);
+
         return enzymes;
     }
 }

@@ -19,6 +19,9 @@ PhosphoRT:
 PepxmlIdfileReader:
 - when load spectrumTitle from spectrum file by PSM index, subtruct one, as java array indexing is 0-based
 
+EnzymFactory
+- add no digestion
+
 
 Build:
 ```bash
